@@ -1,0 +1,99 @@
+在 Linux 平台对 iOS app 进行 re-sign 处理，适用于混合模式 app 开发的快速打包。
+
+参考资料：
+
+	iSign - 在 Linux 上对 ios app 进行 re-sign
+		https://eng.saucelabs.com/blog/isign
+
+	在 CentOS 上安装高版本的 python（iSign 需要 python）
+		How To Set Up Python 2.7.6 and 3.3.3 on CentOS 6.4
+		https://www.digitalocean.com/community/tutorials/how-to-set-up-python-2-7-6-and-3-3-3-on-centos-6-4
+
+		How to install Python 2.7 and Python 3.3 on CentOS 6
+		http://toomuchdata.com/2014/02/16/how-to-install-python-on-centos/
+
+	virtualenv 可以使多个 python 并存
+		Common Python Tools: Using virtualenv, Installing with Pip, and Managing Packages
+		https://www.digitalocean.com/community/tutorials/common-python-tools-using-virtualenv-installing-with-pip-and-managing-packages
+
+	在 Xcode 中查看、管理相关资源设置
+		Setting up Xcode to automatically manage your provisioning profiles
+		https://developer.apple.com/library/ios/qa/qa1814/_index.html
+
+		Maintaining Identifiers, Devices, and Profiles
+		https://developer.apple.com/library/ios/documentation/IDEs/Conceptual/AppDistributionGuide/MaintainingProfiles/MaintainingProfiles.html
+
+	Inside Code Signing
+	https://www.objc.io/issues/17-security/inside-code-signing/
+
+	iTCh - iOS tool chain for Windows
+	http://www.itoolchain.com/
+
+	How to Re-Sign an iOS App from an External Developer
+	http://dev.mlsdigital.net/posts/how-to-resign-an-ios-app-from-external-developers/
+
+	Re-sign IPA (iPhone)
+	http://stackoverflow.com/questions/6896029/re-sign-ipa-iphone
+
+安装使用
+
+	# 安装 python 2.7
+	wget https://www.python.org/ftp/python/2.7.11/Python-2.7.11.tgz
+	tar -xvf Python-2.7.11.tgz
+	cd Python-2.7.11
+	./configure --prefix=/usr/local --enable-unicode=ucs4 --enable-shared LDFLAGS="-Wl,-rpath /usr/local/lib"
+	make
+	make altinstall
+
+	# 安装 pip
+	wget https://bootstrap.pypa.io/ez_setup.py
+	python2.7 ez_setup.py
+	easy_install-2.7 pip
+
+	|pip2.7 install virtualenv
+	|virtualenv --python=/usr/local/bin/python2.7 ios-resign
+	|ios-resign/bin/python setup.py
+
+	# 安装 isign
+	yum install libffi-devel
+	pip2.7 install isign
+
+	# 重建 apple certificate
+	cd /mnt/src/ios-resign/isign
+	curl -L 'https://www.apple.com/appleca/AppleIncRootCertificate.cer' > AppleIncRootCertificate.cer
+	curl -L 'http://developer.apple.com/certificationauthority/AppleWWDRCA.cer' > AppleWWDRCA.cer
+	openssl x509 -inform der -in AppleIncRootCertificate.cer -outform pem -out AppleIncRootCertificate.pem
+	openssl x509 -inform der -in AppleWWDRCA.cer -outform pem -out AppleWWDRCA.pem
+	cat AppleWWDRCA.pem AppleIncRootCertificate.pem > applecerts.pem
+
+	# 导出密钥和证书
+	openssl pkcs12 -in HornetDistKey.p12 -out dist-certificate.pem -clcerts -nokeys
+	openssl pkcs12 -in HornetDistKey.p12 -out dist-key.pem -nocerts -nodes
+
+	# 修改 /usr/local/lib/python2.7/site-packages/isign/code_resources.py:146
+	if self.respect_omissions is True:
+		val['hash2'] = plistlib.Data(get_hash2_binary(path))
+
+	@memoize
+	def get_hash2_hex(path):
+		""" Get the hash of a file at path, encoded as hexadecimal """
+		hasher = hashlib.sha256()
+		with open(path, 'rb') as afile:
+			buf = afile.read(HASH_BLOCKSIZE)
+			while len(buf) > 0:
+				hasher.update(buf)
+				buf = afile.read(HASH_BLOCKSIZE)
+		return hasher.hexdigest()
+
+	@memoize
+	def get_hash2_binary(path):
+		""" Get the hash of a file at path, encoded as binary """
+		return binascii.a2b_hex(get_hash2_hex(path))
+
+	# 重新签名
+	cd /mnt/src/ios-resign
+	rm -rf build
+	mkdir build
+	mkdir build/Payload
+	isign -a isign/applecerts.pem -c isign/dist-certificate.pem -k isign/dist-key.pem -p isign/dist-adhoc.mobileprovision -o build/Payload/hornet.app hornet.ipa/Payload/hornet.app/
+	cd build; zip -r hornet-adhoc.ipa Payload; cd ..

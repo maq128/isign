@@ -143,6 +143,10 @@ class ResourceBuilder(object):
                 # the Data element in plists is base64-encoded
                 val = {'hash': plistlib.Data(get_hash_binary(path))}
 
+                # for version 2
+                if self.respect_omissions is True:
+                    val['hash2'] = plistlib.Data(get_hash2_binary(path))
+
                 if rule.is_optional():
                     val['optional'] = True
 
@@ -174,6 +178,24 @@ def get_template():
     template_path = os.path.join(current_dir, TEMPLATE_FILENAME)
     fh = open(template_path, 'r')
     return plistlib.readPlist(fh)
+
+
+@memoize
+def get_hash2_hex(path):
+    """ Get the hash of a file at path, encoded as hexadecimal """
+    hasher = hashlib.sha256()
+    with open(path, 'rb') as afile:
+        buf = afile.read(HASH_BLOCKSIZE)
+        while len(buf) > 0:
+            hasher.update(buf)
+            buf = afile.read(HASH_BLOCKSIZE)
+    return hasher.hexdigest()
+
+
+@memoize
+def get_hash2_binary(path):
+    """ Get the hash of a file at path, encoded as binary """
+    return binascii.a2b_hex(get_hash2_hex(path))
 
 
 @memoize
