@@ -35,6 +35,20 @@
 	Re-sign IPA (iPhone)
 	http://stackoverflow.com/questions/6896029/re-sign-ipa-iphone
 
+	Mac 里 xcarchive 的存放位置
+	/Users/apple/Library/Developer/Xcode/Archives/...
+
+	Mac 里的签名操作
+		# Verifying the App Binary Entitlements
+		codesign -d --entitlements - /Users/apple/app-dev/TEMP/hornet.app/
+		security cms -D -i /Users/apple/app-dev/TEMP/hornet.app/embedded.mobileprovision
+
+		# Resign the app
+		codesign -f -v -s "GWVR74HA2R" /Users/apple/app-dev/TEMP/hornet.app/
+
+		# Verify that the code was signed correctly
+		codesign -dvvv /Users/apple/app-dev/TEMP/hornet.app/
+
 安装使用
 
 	# 安装 python 2.7
